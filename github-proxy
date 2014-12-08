@@ -1,0 +1,63 @@
+#!/usr/bin/env node
+
+// 由于在国内访问 github 通常很慢，而作为序员又经常要和它打交道，所以就有了此脚本
+//
+// 实现原理：将 git@github.com:/author/repo.git 请求跳转到此脚本，然后在这里判断该 repo 是否已经 clone 过
+// 如果是的话，直接从本机返回，就不用再去 github 绕一圈了，如果还没有，就从 github clone 一份，然后存到本地
+//
+// 准备工作：`git config --global url."http://your-host:port/".insteadOf "git@github.com:"`
+
+var http = require('http')
+var fs = require('fs')
+var exec = require('child_process').exec
+
+var arguments = process.argv.slice(2);
+
+if (arguments.length != 1) {
+	console.log('use it like `./github-proxy repo-dir`')
+	process.exit(1)
+}
+
+var repoBaseDir = arguments[0]
+
+if (!fs.existsSync(repoBaseDir)) {
+	fs.mkdirSync(repoBaseDir)
+}
+
+http.createServer(function(req, res){
+	var file = req.url.split('?')[0]
+	file = repoBaseDir + file
+
+	if (fs.existsSync(file)) {
+		res.end(fs.readFileSync(file))
+	} else {
+		// 请求一个不存在的 repo
+		if (req.url.indexOf('info/refs') != -1) {
+			var repoItems = req.url.split('/')
+			var repoAuthorName = repoItems[1]
+			var repoName = repoItems[2]
+			var repoDir = repoBaseDir + '/' + repoAuthorName
+
+			if (!fs.existsSync(repoDir)) {
+				fs.mkdirSync(repoDir)
+			}
+
+			var cloneCmd = 'cd ' + repoDir + ' && git clone --bare https://github.com/' + repoAuthorName + '/' + repoName + ' && cd '+ repoName +' && git update-server-info --force'
+
+			exec(cloneCmd, function(error, stdout, stderr){
+				if (!error) {
+					res.end(fs.readFileSync(file))
+				} else {
+					console.log('clone error: ' + error)
+					res.writeHead(404, {'Content-Type': 'text/plain'})
+					res.end()
+				}
+			})
+		} else {
+			res.writeHead(404, {'Content-Type': 'text/plain'})
+			res.end()
+		}
+	}
+}).listen(4074, '0.0.0.0')
+
+console.log('server running at 127.0.0.1:4074')
