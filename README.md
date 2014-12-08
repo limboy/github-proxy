@@ -1,3 +1,8 @@
+## Attention
+
+目前的实现有点问题，比如无法处理 `git push git@github.com:author/repo.git`
+
+
 ### 这是什么
 
 作为一个序员，经常会显式/隐式地执行 `git clone git@github.com:author/repo.git`，但因为某些原因，这个操作会执行很长的时间，然后生活就不再美好了。
